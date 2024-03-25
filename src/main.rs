@@ -2,16 +2,61 @@ use async_openai::{
     types::{CreateImageRequestArgs, ImageModel, ImageSize, ResponseFormat},
     Client,
 };
-use std::error::Error;
+use server::server::spawn_server;
 use std::fs; // For file deletion
-use std::io::{self}; // Adjusted io import for writing to stdout immediately
+use std::io; // Adjusted io import for writing to stdout immediately
 use std::path::Path; // For path operations
+use std::{env, error::Error};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use webbrowser;
+
+pub mod server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // create client, reads OPENAI_API_KEY environment variable for API key.
-    let client = Client::new();
+    let args: Vec<String> = env::args().collect();
+    let is_debug = args.get(3);
 
+    // add channel here and pass it to server. await receiving message after opening page
+
+    let (tx, mut rx): (Sender<String>, Receiver<String>) = channel(1);
+
+    let server_handle = spawn_server(tx).await;
+
+    match is_debug {
+        Some(_) => println!("Debug mode: image generation skipped"),
+        None => generate_image_from_prompt().await?,
+    }
+
+    let app_id = "986335749574127"; // Replace with your actual app ID
+    let redirect_uri = "https://127.0.0.1:8080"; // Replace with your actual redirect URI
+    let state_param = "abc"; // Replace with your actual state parameter
+
+    let url = format!(
+        "https://www.facebook.com/v19.0/dialog/oauth?client_id={}&redirect_uri={}&state={}&scope=instagram_basic,instagram_content_publish,pages_show_list",
+        app_id, redirect_uri, state_param
+    );
+
+    if webbrowser::open(&url).is_ok() {
+        println!("Opened {} in the default web browser.", url);
+    } else {
+        println!("Failed to open URL.");
+    }
+
+    // Here we wait to receive the redirect URI from the server
+    match rx.recv().await {
+        Some(redirect_uri) => println!("Received redirect URI: {}", redirect_uri),
+        None => println!("Channel was closed"),
+    }
+
+    // Wait for the server task to complete (if needed)
+    let _ = server_handle.await;
+
+    Ok(())
+}
+
+async fn generate_image_from_prompt() -> Result<(), Box<dyn Error>> {
+    let client = Client::new();
     loop {
         // Prompt the user for input
         println!("Enter your prompt for image generation:");
@@ -32,7 +77,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         // Assuming response.save("./data") returns a Vec<String> of file paths
         let paths = response.save("./data").await?;
-        
+
         // Open the first image for the user to review
         if let Some(first_path) = paths.get(0) {
             open::that(&first_path)?; // Use the `open` crate to open the image file
@@ -42,7 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut confirmation = String::new();
             io::stdin().read_line(&mut confirmation)?;
             if confirmation.trim().eq_ignore_ascii_case("y") {
-                break; // Exit the loop if the user is satisfied
+                return Ok(());
             } else {
                 // Delete the image if the user is not satisfied
                 fs::remove_file(Path::new(first_path))?;
@@ -52,6 +97,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("No image was generated. Please try again.");
         }
     }
-
-    Ok(())
 }
