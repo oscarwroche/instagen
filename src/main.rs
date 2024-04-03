@@ -1,19 +1,26 @@
 use async_openai::{
     types::{CreateImageRequestArgs, ImageModel, ImageSize, ResponseFormat},
-    Client,
+    Client as OpenAiClient,
 };
+use aws_config;
+use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::Client as AwsS3Client;
+use dotenv::dotenv;
 use server::server::spawn_server;
-use std::fs; // For file deletion
 use std::io; // Adjusted io import for writing to stdout immediately
 use std::path::Path; // For path operations
 use std::{env, error::Error};
+use std::{fs, path::PathBuf}; // For file deletion
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use utils::utils::generate_s3_key_with_timestamp;
 use webbrowser;
 
 pub mod server;
+pub mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    dotenv().ok();
     let args: Vec<String> = env::args().collect();
     let is_debug = args.get(3);
 
