@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Here we wait to receive the redirect URI from the server
     match rx.recv().await {
-        Some(redirect_uri) => println!("Received redirect URI: {}", redirect_uri),
+        Some(_) => println!("Image upload succeeded"),
         None => println!("Channel was closed"),
     }
 
