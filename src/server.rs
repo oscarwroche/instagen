@@ -19,6 +19,8 @@ pub mod server {
     };
     use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
+    use crate::utils::utils::{extract_query_parameter, extract_s3_file_uri_from_state};
+
     #[derive(Deserialize)]
     struct AccessToken {
         access_token: String,
@@ -61,11 +63,19 @@ pub mod server {
             let (socket, _) = listener.accept().await.unwrap();
             let accepted_stream = acceptor.accept(socket).await.unwrap();
 
-            let code = handle_client_request(accepted_stream).await.unwrap();
+            let (code, state) = handle_client_request(accepted_stream).await.unwrap();
 
             let access_token = get_access_token(code).await.unwrap();
 
-            post_picture(access_token).await.unwrap();
+            let is_debug = args.get(3);
+
+            match is_debug {
+                Some(_) => println!("Debug mode: image post skipped"),
+                None => {
+                    let s3_file_uri = extract_s3_file_uri_from_state(state).unwrap();
+                    post_picture(s3_file_uri, access_token).await.unwrap()
+                }
+            }
 
             if let Err(e) = tx.send("Success".to_string()).await {
                 eprintln!("Failed to send message to main thread: {}", e);
@@ -75,7 +85,7 @@ pub mod server {
 
     async fn handle_client_request(
         mut accepted_stream: TlsStream<TcpStream>,
-    ) -> Result<String, Box<dyn error::Error>> {
+    ) -> Result<(String, String), Box<dyn error::Error>> {
         let mut buf = Vec::new();
         let mut temp_buf = [0; 1024]; // Temporary buffer to read chunks
         loop {
@@ -90,21 +100,18 @@ pub mod server {
             if buf.windows(4).any(|window| window == b"\r\n\r\n") {
                 let request = String::from_utf8_lossy(&buf);
                 println!("Received request:\n{}", request);
-                // Process the request here
-                if let Some(code_start) = request.find("/?code=") {
-                    // Start index is after "/?code="
-                    let start_index = code_start + "/?code=".len();
-                    // End index is either the next "&" or the end of the line
-                    let end_index = request[start_index..]
-                        .find('&')
-                        .map_or_else(|| request[start_index..].find(' ').unwrap_or(0), |v| v)
-                        + start_index;
+                // Assuming the URL is properly encoded and parameters are well-formed
+                let code = extract_query_parameter(&request, "code");
+                let state = extract_query_parameter(&request, "state");
 
-                    let code_value = &request[start_index..end_index];
-                    println!("Code: {}", code_value);
-                    return Ok(code_value.to_string());
+                match (code, state) {
+                    (Some(code_value), Some(state_value)) => {
+                        println!("Code: {}", code_value);
+                        println!("State: {}", state_value);
+                        return Ok((code_value.to_string(), state_value.to_string()));
+                    }
+                    _ => break,
                 }
-                break;
             }
         }
         Err("Failed to parse the code from the user request".into())
@@ -135,13 +142,15 @@ pub mod server {
         Ok(access_token)
     }
 
-    async fn post_picture(access_token: String) -> Result<(), Box<dyn error::Error>> {
-        let image_url = "https://miro.medium.com/v2/resize:fit:1024/0*wATbQ49jziZTyhZH.jpg";
+    async fn post_picture(
+        s3_file_uri: String,
+        access_token: String,
+    ) -> Result<(), Box<dyn error::Error>> {
         let ig_user_id = "17841464829741641";
 
         let media_request_url = format!(
             "https://graph.facebook.com/v19.0/{}/media?image_url={}&access_token={}",
-            ig_user_id, image_url, access_token,
+            ig_user_id, s3_file_uri, access_token,
         );
 
         let container_id_response = Client::new().post(media_request_url).send().await?;

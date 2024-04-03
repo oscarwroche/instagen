@@ -32,22 +32,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match is_debug {
         Some(_) => println!("Debug mode: image generation skipped"),
-        None => generate_image_from_prompt().await?,
-    }
-
-    let app_id = "986335749574127"; // Replace with your actual app ID
-    let redirect_uri = "https://127.0.0.1:8080"; // Replace with your actual redirect URI
-    let state_param = "abc"; // Replace with your actual state parameter
-
-    let url = format!(
-        "https://www.facebook.com/v19.0/dialog/oauth?client_id={}&redirect_uri={}&state={}&scope=instagram_basic,instagram_content_publish,pages_show_list",
-        app_id, redirect_uri, state_param
-    );
-
-    if webbrowser::open(&url).is_ok() {
-        println!("Opened {} in the default web browser.", url);
-    } else {
-        println!("Failed to open URL.");
+        None => {
+            let path = generate_image_from_prompt().await?;
+            let s3_file_uri = upload_file_to_bucket(&*path).await?;
+            open_fb_oauth_url(s3_file_uri).await?;
+        }
     }
 
     // Here we wait to receive the redirect URI from the server
@@ -62,8 +51,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn generate_image_from_prompt() -> Result<(), Box<dyn Error>> {
-    let client = Client::new();
+async fn generate_image_from_prompt() -> Result<PathBuf, Box<dyn Error>> {
+    let client = OpenAiClient::new();
     loop {
         // Prompt the user for input
         println!("Enter your prompt for image generation:");
@@ -94,7 +83,7 @@ async fn generate_image_from_prompt() -> Result<(), Box<dyn Error>> {
             let mut confirmation = String::new();
             io::stdin().read_line(&mut confirmation)?;
             if confirmation.trim().eq_ignore_ascii_case("y") {
-                return Ok(());
+                return Ok(first_path.clone());
             } else {
                 // Delete the image if the user is not satisfied
                 fs::remove_file(Path::new(first_path))?;
@@ -104,4 +93,43 @@ async fn generate_image_from_prompt() -> Result<(), Box<dyn Error>> {
             println!("No image was generated. Please try again.");
         }
     }
+}
+
+async fn upload_file_to_bucket(file_path: &Path) -> Result<String, Box<dyn Error>> {
+    let shared_config = aws_config::load_from_env().await;
+    let bucket = "instagen";
+    let client = AwsS3Client::new(&shared_config);
+
+    let body = ByteStream::from_path(file_path).await?;
+
+    let key = generate_s3_key_with_timestamp();
+
+    client
+        .put_object()
+        .bucket(bucket)
+        .key(&key)
+        .body(body)
+        .send()
+        .await?;
+
+    println!("File uploaded to {}/{}", bucket, key);
+
+    let aws_region = env::var("AWS_REGION")?;
+
+    Ok(format!("https://{}.s3.{}.amazonaws.com/{}", bucket, aws_region, key).to_string())
+}
+
+async fn open_fb_oauth_url(s3_file_uri: String) -> Result<(), Box<dyn Error>> {
+    let app_id = "986335749574127"; // Replace with your actual app ID
+    let redirect_uri = "https://127.0.0.1:8080"; // Replace with your actual redirect URI
+    let state_param = format!(r#"{{"{{s3_file_uri={}}}"}}"#, s3_file_uri); // Replace with your actual state parameter
+
+    let url = format!(
+        "https://www.facebook.com/v19.0/dialog/oauth?client_id={}&redirect_uri={}&state={}&scope=instagram_basic,instagram_content_publish,pages_show_list",
+        app_id, redirect_uri, state_param
+    );
+
+    webbrowser::open(&url)?;
+
+    Ok(())
 }
