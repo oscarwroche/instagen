@@ -5,16 +5,21 @@ use async_openai::{
 use aws_config;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client as AwsS3Client;
+use constants::{
+    FB_APP_ID, FB_OAUTH_REDIRECT_URL, LOCAL_IMAGE_SAVING_FOLDER_NAME, OPENAI_USER_NAME,
+    S3_IMAGE_BUCKET_NAME,
+};
 use dotenv::dotenv;
-use server::server::spawn_server;
+use server::spawn_server;
 use std::io; // Adjusted io import for writing to stdout immediately
 use std::path::Path; // For path operations
 use std::{env, error::Error};
 use std::{fs, path::PathBuf}; // For file deletion
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use utils::utils::generate_s3_key_with_timestamp;
+use utils::generate_s3_key_with_timestamp;
 use webbrowser;
 
+pub mod constants;
 pub mod server;
 pub mod utils;
 
@@ -66,13 +71,13 @@ async fn generate_image_from_prompt() -> Result<PathBuf, Box<dyn Error>> {
             .n(1)
             .response_format(ResponseFormat::Url)
             .size(ImageSize::S1024x1024)
-            .user("async-openai")
+            .user(OPENAI_USER_NAME)
             .build()?;
 
         let response = client.images().create(request).await?;
 
         // Assuming response.save("./data") returns a Vec<String> of file paths
-        let paths = response.save("./data").await?;
+        let paths = response.save(LOCAL_IMAGE_SAVING_FOLDER_NAME).await?;
 
         // Open the first image for the user to review
         if let Some(first_path) = paths.get(0) {
@@ -97,7 +102,7 @@ async fn generate_image_from_prompt() -> Result<PathBuf, Box<dyn Error>> {
 
 async fn upload_file_to_bucket(file_path: &Path) -> Result<String, Box<dyn Error>> {
     let shared_config = aws_config::load_from_env().await;
-    let bucket = "instagen";
+    let bucket = S3_IMAGE_BUCKET_NAME;
     let client = AwsS3Client::new(&shared_config);
 
     let body = ByteStream::from_path(file_path).await?;
@@ -116,12 +121,12 @@ async fn upload_file_to_bucket(file_path: &Path) -> Result<String, Box<dyn Error
 
     let aws_region = env::var("AWS_REGION")?;
 
-    Ok(format!("https://{}.s3.{}.amazonaws.com/{}", bucket, aws_region, key).to_string())
+    Ok(format_args!("https://{}.s3.{}.amazonaws.com/{}", bucket, aws_region, key).to_string())
 }
 
 async fn open_fb_oauth_url(s3_file_uri: String) -> Result<(), Box<dyn Error>> {
-    let app_id = "986335749574127"; // Replace with your actual app ID
-    let redirect_uri = "https://127.0.0.1:8080"; // Replace with your actual redirect URI
+    let app_id = FB_APP_ID;
+    let redirect_uri = FB_OAUTH_REDIRECT_URL;
     let state_param = format!(r#"{{"{{s3_file_uri={}}}"}}"#, s3_file_uri); // Replace with your actual state parameter
 
     let url = format!(
