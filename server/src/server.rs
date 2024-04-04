@@ -18,7 +18,6 @@ use tokio::{
     io::AsyncReadExt,
     net::{TcpListener, TcpStream},
     spawn,
-    sync::mpsc::Sender,
 };
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
@@ -43,7 +42,7 @@ fn load_keys(path: &Path) -> io::Result<PrivateKeyDer<'static>> {
         .map(Into::into)
 }
 
-pub async fn spawn_server(tx: Sender<String>) -> tokio::task::JoinHandle<()> {
+pub async fn spawn_server() -> tokio::task::JoinHandle<()> {
     spawn(async move {
         let args: Vec<String> = env::args().collect();
 
@@ -77,10 +76,6 @@ pub async fn spawn_server(tx: Sender<String>) -> tokio::task::JoinHandle<()> {
                 post_picture(s3_file_uri, access_token).await.unwrap()
             }
         }
-
-        if let Err(e) = tx.send("Success".to_string()).await {
-            eprintln!("Failed to send message to main thread: {}", e);
-        };
     })
 }
 

@@ -21,3 +21,12 @@ aws-sdk-s3 = "1.21.0"
 chrono = "0.4.37"
 dotenv = "0.15.0"
 percent-encoding = "2.3.1"
+axum = { version = "0.7.5", features = ["macros"] }
+
+[dependencies.uuid]
+version = "1.8.0"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
