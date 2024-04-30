@@ -22,6 +22,8 @@ chrono = "0.4.37"
 dotenv = "0.15.0"
 percent-encoding = "2.3.1"
 axum = { version = "0.7.5", features = ["macros"] }
+askama = "0.12.1"
+tower-http = { version = "0.5.2", features = ["fs"]}
 
 [dependencies.uuid]
 version = "1.8.0"

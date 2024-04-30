@@ -9,4 +9,8 @@ impl Image {
     pub fn new(url: String) -> Self {
         Image { url }
     }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
 }

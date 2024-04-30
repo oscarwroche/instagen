@@ -5,14 +5,15 @@ use crate::{
         },
         services::auth_service::AuthCredentials,
     },
-    domain::entities::image::Image,
     infrastructure::{
         repositories::instagram_post_repository::InstagramPostRepository,
         services::{facebook_auth_service::FacebookAuthService, open_ai_adapter::OpenAIAdapter},
     },
 };
+use askama::Template;
 use axum::{
     extract::{Json, Query, State},
+    response::Html,
     routing::post,
     Router,
 };
@@ -22,6 +23,14 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::{collections::HashMap, error::Error, sync::Arc};
 use tokio::{spawn, sync::Mutex};
+use tower_http::services::ServeFile;
+
+#[derive(Template)]
+#[template(path = "img.html")]
+
+struct ImgTemplate<'a> {
+    url: &'a str,
+}
 
 #[derive(Clone)]
 struct AppState {
@@ -53,12 +62,14 @@ pub async fn serve() {
 
     println!("before app");
 
-    let app = Router::new()
+    let api_router = Router::new()
         .route("/image", post(generate_image_from_prompt_handler))
         .route("/post", post(authenticate_and_post_handler))
         .with_state(shared_state);
 
-    println!("after app");
+    let app = Router::new()
+        .nest("/api", api_router)
+        .nest_service("/", ServeFile::new("static/index.html"));
 
     let listener = tokio::net::TcpListener::bind(tcp_listener_address)
         .await
@@ -79,12 +90,19 @@ struct GenerateImageFromPrompt {
 async fn generate_image_from_prompt_handler(
     State(state): State<AppState>,
     Json(payload): Json<GenerateImageFromPrompt>,
-) -> Json<Image> {
+) -> Html<String> {
     println!("inside handler");
-    let result = generate_image_from_prompt(state.open_ai_adapter, &(payload.prompt))
+    let image = generate_image_from_prompt(state.open_ai_adapter, &(payload.prompt))
         .await
         .unwrap();
-    Json(result)
+
+    let img = ImgTemplate {
+        url: &(image.url()),
+    };
+
+    let result = img.render().unwrap();
+
+    Html(result)
 }
 
 async fn authenticate_and_post_handler(
