@@ -24,6 +24,7 @@ use std::env;
 use std::{collections::HashMap, error::Error, sync::Arc};
 use tokio::{spawn, sync::Mutex};
 use tower_http::services::ServeFile;
+use tower_http::trace::TraceLayer;
 
 #[derive(Template)]
 #[template(path = "img.html")]
@@ -60,12 +61,13 @@ pub async fn serve() {
         instagram_post_repository,
     };
 
-    println!("before app");
-
     let api_router = Router::new()
         .route("/image", post(generate_image_from_prompt_handler))
         .route("/post", post(authenticate_and_post_handler))
-        .with_state(shared_state);
+        .with_state(shared_state)
+        .layer(TraceLayer::new_for_http());
+
+    tracing_subscriber::fmt::init();
 
     let app = Router::new()
         .nest("/api", api_router)
@@ -75,11 +77,7 @@ pub async fn serve() {
         .await
         .unwrap();
 
-    println!("after listener");
-
     axum::serve(listener, app).await.unwrap();
-
-    println!("after serve");
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,7 +89,6 @@ async fn generate_image_from_prompt_handler(
     State(state): State<AppState>,
     Json(payload): Json<GenerateImageFromPrompt>,
 ) -> Html<String> {
-    println!("inside handler");
     let image = generate_image_from_prompt(state.open_ai_adapter, &(payload.prompt))
         .await
         .unwrap();
