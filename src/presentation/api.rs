@@ -6,7 +6,10 @@ use crate::{
         services::auth_service::AuthCredentials,
     },
     infrastructure::{
-        repositories::instagram_post_repository::InstagramPostRepository,
+        repositories::{
+            instagram_post_repository::InstagramPostRepository,
+            s3_image_repository::{self, S3ImageRepository},
+        },
         services::{facebook_auth_service::FacebookAuthService, open_ai_adapter::OpenAIAdapter},
     },
 };
@@ -45,6 +48,9 @@ pub async fn serve() {
     let fb_client_secret = env::var("FB_CLIENT_SECRET").unwrap();
     let ig_user_id = env::var("IG_USER_ID").unwrap();
     let tcp_listener_address = env::var("TCP_LISTENER_ADDRESS").unwrap();
+    let aws_bucket_name = env::var("AWS_BUCKET_NAME").unwrap();
+
+    let aws_config = aws_config::load_from_env().await;
 
     let open_ai_adapter = Arc::new(OpenAIAdapter::new());
     let facebook_auth_service = Arc::new(FacebookAuthService::new(
@@ -55,6 +61,7 @@ pub async fn serve() {
         String::from(ig_user_id),
         facebook_auth_service.clone(),
     )));
+    let s3_image_repository = Arc::new(S3ImageRepository::new(aws_config, aws_bucket_name));
 
     let shared_state = AppState {
         open_ai_adapter,
