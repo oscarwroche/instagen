@@ -9,7 +9,7 @@
 </head>
 <body>
     <h1>Generate Image</h1>
-    <form hx-post="/generate_image" hx-trigger="submit" hx-target="#result">
+    <form hx-post="/api/image" hx-trigger="submit" hx-target="#result">
         <label for="prompt">Enter Prompt:</label>
         <input type="text" id="prompt" name="prompt" required>
         <button type="submit">Generate Image</button>
