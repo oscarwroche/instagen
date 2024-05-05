@@ -31,11 +31,8 @@ impl S3ImageRepository {
 #[async_trait]
 impl ImageRepository for S3ImageRepository {
     async fn save(&self, image: &GeneratedImage) -> Result<SavedImage, Box<dyn Error>> {
-        let parsed_json: Value = serde_json::from_str(image.data())?;
-        let base64_image_data = parsed_json["image_data"].as_str().unwrap();
-
         // Decode the base64 string into bytes
-        let image_bytes = base64::decode(base64_image_data)?;
+        let image_bytes = base64::decode(image.data())?;
 
         // Convert the bytes into a ByteStream for the S3 upload
         let byte_stream = ByteStream::from(image_bytes);
