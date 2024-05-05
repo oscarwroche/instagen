@@ -1,14 +1,12 @@
 use crate::{
     application::{
-        commands::{
-            generate_image_from_prompt::generate_image_from_prompt, post_image::post_image,
-        },
+        commands::{generate_and_upload_image::generate_and_upload_image, post_image::post_image},
         services::auth_service::AuthCredentials,
     },
     infrastructure::{
         repositories::{
             instagram_post_repository::InstagramPostRepository,
-            s3_image_repository::{self, S3ImageRepository},
+            s3_image_repository::S3ImageRepository,
         },
         services::{facebook_auth_service::FacebookAuthService, open_ai_adapter::OpenAIAdapter},
     },
@@ -40,6 +38,7 @@ struct ImgTemplate<'a> {
 struct AppState {
     open_ai_adapter: Arc<OpenAIAdapter>,
     instagram_post_repository: Arc<Mutex<InstagramPostRepository>>,
+    s3_image_repository: Arc<S3ImageRepository>,
 }
 
 pub async fn serve() {
@@ -49,6 +48,7 @@ pub async fn serve() {
     let ig_user_id = env::var("IG_USER_ID").unwrap();
     let tcp_listener_address = env::var("TCP_LISTENER_ADDRESS").unwrap();
     let aws_bucket_name = env::var("AWS_BUCKET_NAME").unwrap();
+    let aws_region = env::var("AWS_REGION").unwrap();
 
     let aws_config = aws_config::load_from_env().await;
 
@@ -61,11 +61,16 @@ pub async fn serve() {
         String::from(ig_user_id),
         facebook_auth_service.clone(),
     )));
-    let s3_image_repository = Arc::new(S3ImageRepository::new(aws_config, aws_bucket_name));
+    let s3_image_repository = Arc::new(S3ImageRepository::new(
+        aws_config,
+        aws_bucket_name,
+        aws_region,
+    ));
 
     let shared_state = AppState {
         open_ai_adapter,
         instagram_post_repository,
+        s3_image_repository,
     };
 
     let api_router = Router::new()
@@ -96,9 +101,13 @@ async fn generate_image_from_prompt_handler(
     State(state): State<AppState>,
     Json(payload): Json<GenerateImageFromPrompt>,
 ) -> Html<String> {
-    let image = generate_image_from_prompt(state.open_ai_adapter, &(payload.prompt))
-        .await
-        .unwrap();
+    let image = generate_and_upload_image(
+        state.open_ai_adapter,
+        state.s3_image_repository,
+        &(payload.prompt),
+    )
+    .await
+    .unwrap();
 
     let img = ImgTemplate {
         url: &(image.url()),
