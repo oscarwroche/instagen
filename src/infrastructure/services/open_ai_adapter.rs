@@ -34,7 +34,7 @@ impl ImageGenerationService for OpenAIAdapter {
             .model(ImageModel::DallE3)
             .prompt(prompt)
             .n(1)
-            .response_format(ResponseFormat::Url)
+            .response_format(ResponseFormat::B64Json)
             .size(ImageSize::S1024x1024)
             .user(openai_user_name)
             .build()?;
