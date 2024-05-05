@@ -1,2 +1,2 @@
-pub mod generate_image_from_prompt;
+pub mod generate_and_upload_image;
 pub mod post_image;

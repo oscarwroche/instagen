@@ -1,7 +1,7 @@
 use std::{env, error::Error};
 
 use crate::domain::{
-    entities::image::Image, services::image_generation_service::ImageGenerationService,
+    entities::image::GeneratedImage, services::image_generation_service::ImageGenerationService,
 };
 use async_openai::{
     config::OpenAIConfig,
@@ -9,6 +9,7 @@ use async_openai::{
     Client,
 };
 use axum::async_trait;
+use uuid::Uuid;
 
 pub struct OpenAIAdapter {
     client: Client<OpenAIConfig>,
@@ -23,14 +24,17 @@ impl OpenAIAdapter {
 
 #[async_trait]
 impl ImageGenerationService for OpenAIAdapter {
-    async fn generate_image_from_prompt(&self, prompt: &str) -> Result<Image, Box<dyn Error>> {
+    async fn generate_image_from_prompt(
+        &self,
+        prompt: &str,
+    ) -> Result<GeneratedImage, Box<dyn Error>> {
         let openai_user_name = env::var("OPENAI_USER_NAME").unwrap();
 
         let request = CreateImageRequestArgs::default()
             .model(ImageModel::DallE3)
             .prompt(prompt)
             .n(1)
-            .response_format(ResponseFormat::Url)
+            .response_format(ResponseFormat::B64Json)
             .size(ImageSize::S1024x1024)
             .user(openai_user_name)
             .build()?;
@@ -38,9 +42,10 @@ impl ImageGenerationService for OpenAIAdapter {
         let response = &self.client.images().create(request).await?;
 
         match &*response.data[0] {
-            async_openai::types::Image::Url { url: image_url, .. } => {
-                Ok(Image::new(image_url.to_string())) // Assuming Image::new accepts a &str or similar
-            }
+            async_openai::types::Image::B64Json { b64_json, .. } => Ok(GeneratedImage::new(
+                Uuid::new_v4().to_string(),
+                b64_json.to_string(),
+            )),
             _ => Err("Expected URL image type but got another type.".into()),
         }
     }
