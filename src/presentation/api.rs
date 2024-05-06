@@ -1,6 +1,9 @@
 use crate::{
     application::{
-        commands::{generate_and_upload_image::generate_and_upload_image, post_image::post_image},
+        commands::{
+            delete_image::delete_image, generate_and_upload_image::generate_and_upload_image,
+            post_image::post_image,
+        },
         services::auth_service::AuthCredentials,
     },
     infrastructure::{
@@ -14,8 +17,9 @@ use crate::{
 use askama::Template;
 use axum::{
     extract::{Json, Query, State},
+    http::StatusCode,
     response::Html,
-    routing::post,
+    routing::{delete, post},
     Router,
 };
 use dotenv::dotenv;
@@ -75,6 +79,7 @@ pub async fn serve() {
 
     let api_router = Router::new()
         .route("/image", post(generate_image_from_prompt_handler))
+        .route("/image", delete(delete_image_handler))
         .route("/post", post(authenticate_and_post_handler))
         .with_state(shared_state)
         .layer(TraceLayer::new_for_http());
@@ -116,6 +121,22 @@ async fn generate_image_from_prompt_handler(
     let result = img.render().unwrap();
 
     Html(result)
+}
+
+#[derive(Serialize, Deserialize)]
+struct DeleteImage {
+    image_id: String,
+}
+
+async fn delete_image_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<DeleteImage>,
+) -> StatusCode {
+    delete_image(state.s3_image_repository, payload.image_id)
+        .await
+        .unwrap();
+
+    StatusCode::NO_CONTENT
 }
 
 async fn authenticate_and_post_handler(
