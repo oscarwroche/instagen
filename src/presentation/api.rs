@@ -19,8 +19,8 @@ use axum::{
     extract::{Json, Path, Query, State},
     http::StatusCode,
     response::Html,
-    routing::{delete, post},
-    Router,
+    routing::{delete, get_service, post},
+    Router, ServiceExt,
 };
 use dotenv::dotenv;
 use percent_encoding::percent_decode_str;
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::{collections::HashMap, error::Error, sync::Arc};
 use tokio::{spawn, sync::Mutex};
-use tower_http::services::ServeFile;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 #[derive(Template)]
@@ -81,14 +81,15 @@ pub async fn serve() {
         .route("/images", post(generate_image_from_prompt_handler))
         .route("/images/:id", delete(delete_image_handler))
         .route("/posts", post(authenticate_and_post_handler))
-        .with_state(shared_state)
-        .layer(TraceLayer::new_for_http());
+        .with_state(shared_state);
 
     tracing_subscriber::fmt::init();
 
     let app = Router::new()
         .nest("/api", api_router)
-        .nest_service("/", ServeFile::new("static/index.html"));
+        .nest_service("/static", ServeDir::new("static"))
+        .fallback(get_service(ServeFile::new("static/index.html")))
+        .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(tcp_listener_address)
         .await
