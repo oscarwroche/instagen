@@ -3,7 +3,6 @@ use std::error::Error;
 use aws_config::SdkConfig;
 use aws_sdk_s3::{primitives::ByteStream, Client as S3Client};
 use axum::async_trait;
-use serde_json::Value;
 
 use crate::domain::{
     entities::image::{GeneratedImage, SavedImage},
@@ -55,5 +54,16 @@ impl ImageRepository for S3ImageRepository {
         );
 
         Ok(SavedImage::new(String::from(image.id()), url))
+    }
+
+    async fn delete(&self, image_id: String) -> Result<(), Box<dyn Error>> {
+        self.s3_client
+            .delete_object()
+            .bucket(&self.bucket_name)
+            .key(image_id)
+            .send()
+            .await?;
+
+        Ok(())
     }
 }
