@@ -16,7 +16,7 @@ use crate::{
 };
 use askama::Template;
 use axum::{
-    extract::{Json, Query, State},
+    extract::{Json, Path, Query, State},
     http::StatusCode,
     response::Html,
     routing::{delete, post},
@@ -79,7 +79,7 @@ pub async fn serve() {
 
     let api_router = Router::new()
         .route("/images", post(generate_image_from_prompt_handler))
-        .route("/images", delete(delete_image_handler))
+        .route("/images/:id", delete(delete_image_handler))
         .route("/posts", post(authenticate_and_post_handler))
         .with_state(shared_state)
         .layer(TraceLayer::new_for_http());
@@ -130,9 +130,9 @@ struct DeleteImage {
 
 async fn delete_image_handler(
     State(state): State<AppState>,
-    Json(payload): Json<DeleteImage>,
+    Path(image_id): Path<String>,
 ) -> StatusCode {
-    delete_image(state.s3_image_repository, payload.image_id)
+    delete_image(state.s3_image_repository, image_id)
         .await
         .unwrap();
 
