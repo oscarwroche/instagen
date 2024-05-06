@@ -78,9 +78,9 @@ pub async fn serve() {
     };
 
     let api_router = Router::new()
-        .route("/image", post(generate_image_from_prompt_handler))
-        .route("/image", delete(delete_image_handler))
-        .route("/post", post(authenticate_and_post_handler))
+        .route("/images", post(generate_image_from_prompt_handler))
+        .route("/images", delete(delete_image_handler))
+        .route("/posts", post(authenticate_and_post_handler))
         .with_state(shared_state)
         .layer(TraceLayer::new_for_http());
 
