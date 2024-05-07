@@ -1,23 +1,42 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Generate Image</title>
     <!-- Include htmx library -->
     <script src="https://unpkg.com/htmx.org@1.6.1"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
-    <link href="/static/css/output.css" rel="stylesheet">
-</head>
-<body>
-    <h1 class="text-3xl font-bold underline">Generate Image</h1>
-    <form hx-post="/api/images" hx-trigger="submit" hx-target="#result" hx-ext="json-enc">
+    <link href="/static/css/output.css?id=1234" rel="stylesheet" />
+  </head>
+  <body class="h-screen">
+    <div
+      class="flex flex-col items-center justify-between mx-auto h-full text-red-700"
+    >
+      <h1 class="text-3xl font-bold underline">Generate Image</h1>
+      <form
+        hx-post="/api/images"
+        hx-trigger="submit"
+        hx-target="#result"
+        hx-ext="json-enc"
+        class="flex flex-col h-full px-24 items-center justify-start gap-5"
+      >
         <label for="prompt" class="text-blue text-3xl">Enter Prompt:</label>
-        <input type="text" id="prompt" name="prompt" required>
-        <button type="submit">Generate Image</button>
-    </form>
-
-    <!-- Placeholder for result -->
-    <div id="result"></div>
-</body>
+        <input
+          type="text"
+          id="prompt"
+          name="prompt"
+          required
+          class="border border-px border-gray rounded-xl"
+        />
+        <button
+          type="submit"
+          class="border border-1 border-black rounded-xl p-2"
+        >
+          Generate Image
+        </button>
+      </form>
+      <div id="result"></div>
+    </div>
+  </body>
 </html>
