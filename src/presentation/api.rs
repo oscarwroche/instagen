@@ -19,23 +19,27 @@ use axum::{
     extract::{Json, Path, Query, State},
     http::StatusCode,
     response::Html,
-    routing::{delete, get_service, post},
-    Router, ServiceExt,
+    routing::{delete, get, get_service, post},
+    Router,
 };
+use axum_server::tls_rustls::bind_rustls;
 use dotenv::dotenv;
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::{collections::HashMap, error::Error, sync::Arc};
-use tokio::{spawn, sync::Mutex};
+use std::{env, net::SocketAddr};
+use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
+
+use super::config::load_server_config;
 
 #[derive(Template)]
 #[template(path = "img.html")]
 
 struct ImgTemplate<'a> {
     url: &'a str,
+    fb_oauth_url: &'a str,
 }
 
 #[derive(Clone)]
@@ -50,7 +54,6 @@ pub async fn serve() {
     let fb_app_id = env::var("FB_APP_ID").unwrap();
     let fb_client_secret = env::var("FB_CLIENT_SECRET").unwrap();
     let ig_user_id = env::var("IG_USER_ID").unwrap();
-    let tcp_listener_address = env::var("TCP_LISTENER_ADDRESS").unwrap();
     let aws_bucket_name = env::var("AWS_BUCKET_NAME").unwrap();
     let aws_region = env::var("AWS_REGION").unwrap();
 
@@ -77,10 +80,12 @@ pub async fn serve() {
         s3_image_repository,
     };
 
+    // ADD HTTPS HERE, see: https://github.com/tokio-rs/axum/blob/main/examples/tls-rustls/src/main.rs
+
     let api_router = Router::new()
         .route("/images", post(generate_image_from_prompt_handler))
         .route("/images/:id", delete(delete_image_handler))
-        .route("/posts", post(authenticate_and_post_handler))
+        .route("/perform_post_action", get(authenticate_and_post_handler))
         .with_state(shared_state);
 
     tracing_subscriber::fmt::init();
@@ -91,11 +96,14 @@ pub async fn serve() {
         .fallback(get_service(ServeFile::new("static/index.html")))
         .layer(TraceLayer::new_for_http());
 
-    let listener = tokio::net::TcpListener::bind(tcp_listener_address)
+    let config = load_server_config().await;
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+
+    bind_rustls(addr, config)
+        .serve(app.into_make_service())
         .await
         .unwrap();
-
-    axum::serve(listener, app).await.unwrap();
 }
 
 #[derive(Serialize, Deserialize)]
@@ -117,11 +125,24 @@ async fn generate_image_from_prompt_handler(
 
     let img = ImgTemplate {
         url: &(image.url()),
+        fb_oauth_url: &(generate_fb_oauth_url(image.url())),
     };
 
     let result = img.render().unwrap();
 
     Html(result)
+}
+
+fn generate_fb_oauth_url(s3_image_url: &str) -> String {
+    let fb_app_id = env::var("FB_APP_ID").unwrap();
+    let tcp_listener_address = env::var("TCP_LISTENER_ADDRESS").unwrap();
+    let redirect_uri = format!("https://{}/api/perform_post_action", tcp_listener_address);
+    let state_param = format!(r#"{{"{{s3_file_uri={}}}"}}"#, s3_image_url); // Replace with your actual state parameter
+
+    format!(
+        "https://www.facebook.com/v19.0/dialog/oauth?client_id={}&redirect_uri={}&state={}&scope=instagram_basic,instagram_content_publish,pages_show_list",
+        fb_app_id, redirect_uri, state_param
+    )
 }
 
 #[derive(Serialize, Deserialize)]
@@ -153,23 +174,29 @@ async fn authenticate_and_post_handler(
 
     let instagram_post_repository = state.instagram_post_repository.clone();
 
-    spawn(async move {
+    {
         let mut instagram_post_repository_mutex_guard = instagram_post_repository.lock().await;
+
+        println!("a");
 
         let _ = instagram_post_repository_mutex_guard
             .authenticate(AuthCredentials {
                 parameters: auth_credentials,
             })
             .await;
-    });
 
-    let instagram_post_repository = state.instagram_post_repository.clone();
+        println!("b");
+    }
 
-    spawn(async move {
+    {
+        println!("c");
+
         let instagram_post_repository_mutex_guard = instagram_post_repository.lock().await;
 
         post_image(&*instagram_post_repository_mutex_guard, image_url).await;
-    });
+
+        println!("d");
+    }
 }
 
 pub fn extract_image_url_from_state(s: &str) -> Result<String, Box<dyn Error>> {
@@ -179,7 +206,7 @@ pub fn extract_image_url_from_state(s: &str) -> Result<String, Box<dyn Error>> {
 
     let trimmed = decoded_string.trim_matches(|c| c == '{' || c == '}' || c == '"');
 
-    if !trimmed.starts_with("file_uri=") {
+    if !trimmed.starts_with("s3_file_uri=") {
         return Err(format!("Failed to parse S3 File URI").into());
     };
     return Ok(trimmed["s3_file_uri=".len()..].to_string());

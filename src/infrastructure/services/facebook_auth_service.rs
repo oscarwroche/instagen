@@ -23,7 +23,7 @@ impl FacebookAuthService {
     }
 }
 
-pub const FB_OAUTH_REDIRECT_URL: &str = "https://127.0.0.1:8080";
+pub const FB_OAUTH_REDIRECT_URL: &str = "https://127.0.0.1:8080/api/perform_post_action";
 
 #[async_trait]
 impl AuthService for FacebookAuthService {
@@ -31,17 +31,16 @@ impl AuthService for FacebookAuthService {
         &self,
         credentials: &crate::application::services::auth_service::AuthCredentials,
     ) -> Result<String, Box<dyn Error>> {
-        let redirect_uri = format!("{}/", FB_OAUTH_REDIRECT_URL);
-        // deserialize code from credentials
         let url = format!(
             "https://graph.facebook.com/v19.0/oauth/access_token?client_id={}&redirect_uri={}&client_secret={}&code={}",
-            &self.app_id, redirect_uri, &self.client_secret, credentials.parameters.get("code").unwrap()
+            &self.app_id, FB_OAUTH_REDIRECT_URL, &self.client_secret, credentials.parameters.get("code").unwrap()
         );
 
         let response = Client::new().get(url).send().await?;
 
         if !response.status().is_success() {
-            return Err(format!("Request failed: {}", response.status()).into());
+            println!("Request failed: {}", response.text().await.unwrap());
+            return Err(format!("FB auth failed").into());
         }
 
         let access_token = response.json::<AccessToken>().await?.access_token;

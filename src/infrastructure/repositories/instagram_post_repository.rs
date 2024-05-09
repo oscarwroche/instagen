@@ -50,7 +50,7 @@ impl PostRepository for InstagramPostRepository {
     async fn save(&self, post: &Post) -> Result<(), Box<dyn Error>> {
         let caption = IG_POST_CAPTION;
 
-        let auth_token = self.auth_token.as_ref().unwrap();
+        let auth_token = &self.auth_token.clone().unwrap();
 
         let media_request_url = format!(
             "https://graph.facebook.com/v19.0/{}/media?image_url={}&access_token={}&caption={}",
