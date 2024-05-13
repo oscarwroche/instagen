@@ -44,7 +44,6 @@ impl AuthService for FacebookAuthService {
         }
 
         let access_token = response.json::<AccessToken>().await?.access_token;
-        println!("Access token: {}", access_token);
 
         Ok(access_token)
     }

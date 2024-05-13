@@ -177,32 +177,22 @@ async fn authenticate_and_post_handler(
     {
         let mut instagram_post_repository_mutex_guard = instagram_post_repository.lock().await;
 
-        println!("a");
-
         let _ = instagram_post_repository_mutex_guard
             .authenticate(AuthCredentials {
                 parameters: auth_credentials,
             })
             .await;
-
-        println!("b");
     }
 
     {
-        println!("c");
-
         let instagram_post_repository_mutex_guard = instagram_post_repository.lock().await;
 
         post_image(&*instagram_post_repository_mutex_guard, image_url).await;
-
-        println!("d");
     }
 }
 
 pub fn extract_image_url_from_state(s: &str) -> Result<String, Box<dyn Error>> {
     let decoded_string = percent_decode_str(s).decode_utf8()?;
-
-    println!("Decoded string: {}", decoded_string);
 
     let trimmed = decoded_string.trim_matches(|c| c == '{' || c == '}' || c == '"');
 
