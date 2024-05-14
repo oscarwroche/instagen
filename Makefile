@@ -8,15 +8,15 @@ build:
 clippy:
 	cargo clippy
 
-## run: build & launch server
+## run: build & launch server with tracing
 .PHONY: run
 run:
-	cargo run -- --key-file ssl/key.pem --cert-file ssl/cert.pem
-
-## run: build & launch server with tracing
-.PHONY: run-tracing
-run-tracing:
 	RUST_LOG=tower_http=trace cargo run -- --key-file ssl/key.pem --cert-file ssl/cert.pem
+
+## run: build & launch server with tracing + debug logs
+.PHONY: run-debug
+run-debug:
+	RUST_LOG=debug,tower_http=trace cargo run -- --key-file ssl/key.pem --cert-file ssl/cert.pem
 
 ## css: build tailwindcss
 .PHONY: css

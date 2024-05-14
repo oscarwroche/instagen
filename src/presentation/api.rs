@@ -32,7 +32,7 @@ use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use super::config::load_server_config;
+use super::config::{load_server_config, redirect_http_to_https, Ports};
 
 #[derive(Template)]
 #[template(path = "img.html")]
@@ -80,7 +80,12 @@ pub async fn serve() {
         s3_image_repository,
     };
 
-    // ADD HTTPS HERE, see: https://github.com/tokio-rs/axum/blob/main/examples/tls-rustls/src/main.rs
+    let ports = Ports {
+        http: 7878,
+        https: 3000,
+    };
+
+    tokio::spawn(redirect_http_to_https(ports));
 
     let api_router = Router::new()
         .route("/images", post(generate_image_from_prompt_handler))
@@ -98,7 +103,9 @@ pub async fn serve() {
 
     let config = load_server_config().await;
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let addr = SocketAddr::from(([127, 0, 0, 1], ports.https));
+
+    tracing::debug!("listening on {}", addr);
 
     bind_rustls(addr, config)
         .serve(app.into_make_service())
