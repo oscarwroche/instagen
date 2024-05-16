@@ -23,7 +23,7 @@ impl FacebookAuthService {
     }
 }
 
-pub const FB_OAUTH_REDIRECT_URL: &str = "https://127.0.0.1:8080/api/perform_post_action";
+pub const FB_OAUTH_REDIRECT_URL: &str = "https://0.0.0.0:3000/api/perform_post_action";
 
 #[async_trait]
 impl AuthService for FacebookAuthService {

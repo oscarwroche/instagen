@@ -103,7 +103,7 @@ pub async fn serve() {
 
     let config = load_server_config().await;
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], ports.https));
+    let addr = SocketAddr::from(([0, 0, 0, 0], ports.https));
 
     tracing::debug!("listening on {}", addr);
 
