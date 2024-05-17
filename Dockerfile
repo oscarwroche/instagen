@@ -10,6 +10,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # Create and set the working directory
 WORKDIR /usr/src/instagen
 
+# Copy only the Cargo manifest files
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy source file to compile dependencies
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -f src/main.rs
+
 # Now copy your actual source files
 COPY . .
 
@@ -18,6 +27,9 @@ RUN npm install -g tailwindcss
 
 # Build Tailwind CSS
 RUN tailwindcss -i static/css/input.css -o static/css/output.css --minify
+
+# Change access time of main so that it's recompiled
+RUN touch -a -m ./src/main.rs
 
 # Build the application for release
 RUN cargo build --release
