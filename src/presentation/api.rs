@@ -22,7 +22,6 @@ use axum::{
     routing::{delete, get, get_service, post},
     Router,
 };
-use axum_server::tls_rustls::bind_rustls;
 use dotenv::dotenv;
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
@@ -31,8 +30,6 @@ use std::{env, net::SocketAddr};
 use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
-
-use super::config::{load_server_config, redirect_http_to_https, Ports};
 
 #[derive(Template)]
 #[template(path = "img.html")]
@@ -80,13 +77,6 @@ pub async fn serve() {
         s3_image_repository,
     };
 
-    let ports = Ports {
-        http: 7878,
-        https: 3000,
-    };
-
-    tokio::spawn(redirect_http_to_https(ports));
-
     let api_router = Router::new()
         .route("/images", post(generate_image_from_prompt_handler))
         .route("/images/:id", delete(delete_image_handler))
@@ -101,16 +91,11 @@ pub async fn serve() {
         .fallback(get_service(ServeFile::new("static/index.html")))
         .layer(TraceLayer::new_for_http());
 
-    let config = load_server_config().await;
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], ports.https));
-
-    tracing::debug!("listening on {}", addr);
-
-    bind_rustls(addr, config)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    tracing::debug!("listening on {}", listener.local_addr().unwrap());
+    axum::serve(listener, app).await.unwrap();
 }
 
 #[derive(Serialize, Deserialize)]
