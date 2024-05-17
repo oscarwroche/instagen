@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  rust-server:
+    build: .  # This tells Docker Compose to build an image from the Dockerfile in the current directory
+    env_file:
+      - .env
+    networks:
+      - backend
+
+  nginx:
+    image: nginx:latest  # Example for keeping the nginx part using an image
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./ssl/cert.pem:/etc/ssl/certs/cert.pem:ro  # Adjust the path as needed
+      - ./ssl/key.pem:/etc/ssl/private/key.pem:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - rust-server
+    networks:
+      - backend
+
+networks:
+  backend:  # Defines a network named 'backend' for inter-container communication
